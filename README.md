@@ -59,9 +59,28 @@ API_KEY=dev PLAYER_SALT=dev uvicorn app.main:app --reload
 - `GET /health`
 
 ## Results
-_Fill in with real measurements after deploying:_
-- Load test (locust/k6): **X req/s, p95 Y ms**
-- Game: **Z visits, W peak concurrent players**
+Load test with [Locust](https://locust.io) (`loadtest/locustfile.py`): 50 simulated game servers, each sending
+event batches of 1-25 events, plus occasional stats reads, for 60 s.
+
+Environment: single uvicorn worker on a Windows dev machine, **SQLite** (not PostgreSQL), rate limit disabled,
+Locust on the same machine. These numbers are a local baseline, not production capacity.
+
+| Endpoint | Requests | Failures | Median | p95 | p99 |
+|---|---|---|---|---|---|
+| `POST /v1/events` | 3,460 | 0 | 46 ms | 740 ms | 2,300 ms |
+| `GET /v1/stats/daily` | 170 | 0 | 51 ms | 100 ms | 150 ms |
+| `GET /v1/stats/drops` | 144 | 0 | 17 ms | 75 ms | 110 ms |
+| **All** | 3,774 | 0 | 44 ms | 670 ms | 2,200 ms |
+
+Throughput was about **64 requests/s** (58 req/s of event ingestion). The long tail on `POST /v1/events`
+(max 5.3 s) is probably SQLite's single-writer lock, but that has not been verified against PostgreSQL.
+The deployed Render free instance has not been load tested: it spins down when idle and the API enforces
+600 requests/min per key by default.
+
+Run it yourself: `API_KEY=... locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless -u 50 -r 10 -t 60s`.
+Test events carry `data.load_test = true` so they can be deleted afterwards.
+
+Game traffic numbers (visits, peak concurrent players) are not included yet because the game is not published.
 
 ## Roblox side (already wired into the game)
 `Analytics.track` calls are in `GameServer` for: `steal`, `box_open`, `sell`, `fuse`, `upgrade`, `rebirth`,
