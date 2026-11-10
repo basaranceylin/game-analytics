@@ -1,6 +1,6 @@
 # Anime Heist Analytics
 
-Analytics backend for my live Roblox game **Steal An Anime Character**.
+Analytics backend for my Roblox game **Steal An Anime Character** (built in Luau, not yet published).
 The game's server scripts batch gameplay events and POST them to this API, which stores them
 in PostgreSQL and exposes aggregate stats (DAU, sessions, Robux revenue, observed crate drop rates).
 
