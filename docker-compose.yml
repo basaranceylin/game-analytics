@@ -3,7 +3,7 @@ services:
     build: .
     ports: ["8000:8000"]
     environment:
-      DATABASE_URL: postgresql+psycopg://heist:heist@db:5432/heist
+      DATABASE_URL: postgresql+psycopg://heist:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/heist
       REDIS_URL: redis://redis:6379/0
       API_KEY: ${API_KEY:?set API_KEY in .env}
       PLAYER_SALT: ${PLAYER_SALT:?set PLAYER_SALT in .env}
@@ -16,7 +16,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: heist
-      POSTGRES_PASSWORD: heist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: heist
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:

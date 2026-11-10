@@ -42,7 +42,7 @@ Design decisions
 
 ## Run locally
 ```bash
-cp .env.example .env        # then edit the two secrets
+cp .env.example .env        # then replace the three change-me values (use letters and digits only in POSTGRES_PASSWORD, it goes into a URL)
 docker compose up --build   # API on http://localhost:8000/docs
 ```
 Without Docker:
