@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://heist:heist@db:5432/heist
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      PLAYER_SALT: ${PLAYER_SALT:?set PLAYER_SALT in .env}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-600}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: heist
+      POSTGRES_PASSWORD: heist
+      POSTGRES_DB: heist
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heist"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  pgdata:
