@@ -39,7 +39,8 @@ function Analytics.track(player: Player, eventType: string, fields: Fields?)
 			zone = f.zone,
 			rarity = f.rarity,
 			amount = f.amount,
-			data = f.data or {},
+			-- JSONEncode({}) yields "[]" which the API rejects (422): omit empty data
+			data = (f.data and next(f.data) ~= nil) and f.data or nil,
 		})
 	end)
 	if not ok then warn("[Analytics] track failed") end
