@@ -88,7 +88,7 @@ Game traffic numbers (visits, peak concurrent players) are not included yet beca
 ## Roblox side (already wired into the game)
 `Analytics.track` calls are in `GameServer` for: `steal`, `box_open`, `sell`, `fuse`, `upgrade`, `rebirth`,
 `shop_buy`, `purchase` (premium crates and gamepasses), `reward_claim`, `boss_catch`; the module itself sends
-`session_start`/`session_end`. `train` is not instrumented yet. Until `API_URL` is set the module is a no-op.
+`session_start`/`session_end`. `train` is sent once per training session (total reps) when the player stops training or leaves. Until `API_URL` is set the module is a no-op.
 
 `roblox/Analytics.lua` is a ModuleScript for `ServerScriptService`. Set `API_URL`, enable HTTP requests in
 Game Settings, add the secret `analytics_api_key`, then call `Analytics.track(player, "steal", {zone = 3})`
