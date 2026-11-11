@@ -94,3 +94,12 @@ def test_rate_limit(client, headers):
     os.environ["RATE_LIMIT_PER_MIN"] = "3"
     codes = [client.post("/v1/events", json={"events": [ev()]}, headers=headers).status_code for _ in range(5)]
     assert codes == [202, 202, 202, 429, 429]
+
+
+def test_dashboard_page_is_served_without_key(client):
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "Anime Heist" in r.text
+    # the page itself carries no data; stats endpoints still need the key
+    assert client.get("/v1/stats/daily").status_code == 401

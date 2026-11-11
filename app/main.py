@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Anime Heist Analytics", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard() -> FileResponse:
+    """Static page; it holds no data and asks for the API key in the browser before calling /v1/stats."""
+    return FileResponse(Path(__file__).parent / "static" / "dashboard.html")
 
 
 @app.get("/health")

@@ -57,6 +57,9 @@ API_KEY=dev PLAYER_SALT=dev uvicorn app.main:app --reload
 - `GET /v1/stats/daily?days=7`: DAU, sessions, events, steals, Robux per day
 - `GET /v1/stats/drops`: observed rarity distribution of opened crates
 - `GET /health`
+- `GET /dashboard`: web dashboard (daily players, Robux, crate drop rates, steals). The page itself holds no data;
+  you type the API key in the browser and it calls the two stats endpoints with the same `X-API-Key` header.
+  The key is kept only for the open tab (sessionStorage). The **Demo** button shows fake sample data.
 
 ## Results
 Load test with [Locust](https://locust.io) (`loadtest/locustfile.py`): 50 simulated game servers, each sending

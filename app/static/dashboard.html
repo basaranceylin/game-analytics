@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anime Heist Dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1c2330; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #6d5ef0; --accent2: #f59e0b; --bar: #6d5ef0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1218; --card: #181d27; --text: #e8ecf3; --muted: #94a0b4; --line: #2a3140; --accent: #8b7dff; --accent2: #fbbf24; --bar: #8b7dff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 16px 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select, button { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+  button { cursor: pointer; background: var(--accent); color: #fff; border-color: transparent; }
+  button.ghost { background: var(--card); color: var(--text); border-color: var(--line); }
+  main { padding: 0 20px 28px; max-width: 1100px; margin: 0 auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tile .label { color: var(--muted); font-size: 13px; }
+  .tile .value { font-size: 26px; font-weight: 650; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+  h2 { font-size: 15px; margin: 0 0 2px; }
+  canvas { width: 100%; height: 240px; display: block; margin-top: 8px; }
+  #msg { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; display: none; background: #fef3c7; color: #78350f; }
+  #msg.show { display: block; }
+  #demoTag { display: none; background: var(--accent2); color: #1c1400; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Anime Heist Analytics <span id="demoTag">DEMO DATA</span></h1>
+    <div class="sub">Steal An Anime Character &middot; live game stats</div>
+  </div>
+  <div class="controls">
+    <input id="key" type="password" placeholder="API key" autocomplete="off" aria-label="API key">
+    <select id="days" aria-label="Time range">
+      <option value="7">Last 7 days</option>
+      <option value="14">Last 14 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+    <button id="load">Load</button>
+    <button id="demo" class="ghost" title="Show fake sample data, nothing is sent anywhere">Demo</button>
+  </div>
+</header>
+
+<main>
+  <p id="msg"></p>
+
+  <section class="tiles">
+    <div class="card tile"><div class="label">Players today</div><div class="value" id="tDau">–</div></div>
+    <div class="card tile"><div class="label">Sessions (range)</div><div class="value" id="tSess">–</div></div>
+    <div class="card tile"><div class="label">Robux (range)</div><div class="value" id="tRobux">–</div></div>
+    <div class="card tile"><div class="label">Crates opened</div><div class="value" id="tCrates">–</div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><h2>Daily players</h2><div class="sub">Unique players per day</div><canvas id="cDau"></canvas></div>
+    <div class="card"><h2>Robux revenue</h2><div class="sub">Gamepass and product purchases per day</div><canvas id="cRobux"></canvas></div>
+    <div class="card"><h2>Crate drop rates</h2><div class="sub">Share of opened crates by rarity</div><canvas id="cDrops"></canvas></div>
+    <div class="card"><h2>Steals per day</h2><div class="sub">Crates grabbed in mine zones</div><canvas id="cSteals"></canvas></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY_STORE = "heist_api_key";
+  var demoMode = false;
+
+  function store(get, v) {
+    try { return get ? sessionStorage.getItem(KEY_STORE) : sessionStorage.setItem(KEY_STORE, v); } catch (e) { return null; }
+  }
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function showMsg(t) { $("msg").textContent = t || ""; $("msg").classList.toggle("show", !!t); }
+
+  function fmt(n) { return Math.round(n).toLocaleString("en-US"); }
+
+  // ---- tiny canvas charts (no external libraries) ----
+  function setup(canvas) {
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = "12px system-ui, sans-serif";
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function empty(c, text) {
+    c.ctx.fillStyle = css("--muted"); c.ctx.textAlign = "center";
+    c.ctx.fillText(text, c.w / 2, c.h / 2);
+  }
+
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(v)));
+    var m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  }
+
+  function barChart(canvas, labels, values, opts) {
+    opts = opts || {};
+    var c = setup(canvas), ctx = c.ctx;
+    if (!values.length) return empty(c, "No data yet");
+    var padL = 44, padR = 8, padT = 8, padB = 26;
+    var iw = c.w - padL - padR, ih = c.h - padT - padB;
+    var max = niceMax(Math.max.apply(null, values));
+    ctx.strokeStyle = css("--line"); ctx.fillStyle = css("--muted"); ctx.textAlign = "right";
+    for (var i = 0; i <= 4; i++) {
+      var y = padT + ih - (ih * i / 4);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(c.w - padR, y); ctx.stroke();
+      var label = max * i / 4;
+      ctx.fillText(opts.percent ? Math.round(label * 100) + "%" : fmt(label), padL - 6, y + 4);
+    }
+    var slot = iw / values.length, bw = Math.min(40, slot * 0.7);
+    ctx.fillStyle = opts.color || css("--bar");
+    values.forEach(function (v, i) {
+      var bh = ih * v / max, x = padL + slot * i + (slot - bw) / 2;
+      ctx.fillRect(x, padT + ih - bh, bw, bh);
+    });
+    ctx.fillStyle = css("--muted"); ctx.textAlign = "center";
+    var step = Math.ceil(values.length / Math.max(1, Math.floor(iw / 60)));
+    labels.forEach(function (l, i) {
+      if (i % step === 0) ctx.fillText(l, padL + slot * i + slot / 2, c.h - 8);
+    });
+  }
+
+  function lineChart(canvas, labels, values, color) {
+    var c = setup(canvas), ctx = c.ctx;
+    if (!values.length) return empty(c, "No data yet");
+    var padL = 44, padR = 12, padT = 8, padB = 26;
+    var iw = c.w - padL - padR, ih = c.h - padT - padB;
+    var max = niceMax(Math.max.apply(null, values));
+    ctx.strokeStyle = css("--line"); ctx.fillStyle = css("--muted"); ctx.textAlign = "right";
+    for (var i = 0; i <= 4; i++) {
+      var y = padT + ih - (ih * i / 4);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(c.w - padR, y); ctx.stroke();
+      ctx.fillText(fmt(max * i / 4), padL - 6, y + 4);
+    }
+    var n = values.length;
+    function px(i) { return padL + (n === 1 ? iw / 2 : iw * i / (n - 1)); }
+    function py(v) { return padT + ih - ih * v / max; }
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineJoin = "round";
+    ctx.beginPath();
+    values.forEach(function (v, i) { i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v)); });
+    ctx.stroke();
+    ctx.fillStyle = color;
+    values.forEach(function (v, i) { ctx.beginPath(); ctx.arc(px(i), py(v), 3.5, 0, 6.2832); ctx.fill(); });
+    ctx.fillStyle = css("--muted"); ctx.textAlign = "center";
+    var step = Math.ceil(n / Math.max(1, Math.floor(iw / 60)));
+    labels.forEach(function (l, i) { if (i % step === 0) ctx.fillText(l, px(i), c.h - 8); });
+  }
+
+  // ---- data ----
+  var state = null;
+
+  function render() {
+    if (!state) return;
+    var d = state.daily, drops = state.drops;
+    var short = d.map(function (r) { return r.day.slice(5); });
+    lineChart($("cDau"), short, d.map(function (r) { return r.dau; }), css("--accent"));
+    barChart($("cRobux"), short, d.map(function (r) { return r.robux; }), { color: css("--accent2") });
+    barChart($("cSteals"), short, d.map(function (r) { return r.steals; }));
+    barChart($("cDrops"), drops.map(function (r) { return r.rarity; }), drops.map(function (r) { return r.share; }), { percent: true });
+
+    $("tDau").textContent = d.length ? fmt(d[d.length - 1].dau) : "–";
+    $("tSess").textContent = d.length ? fmt(d.reduce(function (a, r) { return a + r.sessions; }, 0)) : "–";
+    $("tRobux").textContent = d.length ? fmt(d.reduce(function (a, r) { return a + r.robux; }, 0)) : "–";
+    $("tCrates").textContent = fmt(drops.reduce(function (a, r) { return a + r.count; }, 0));
+  }
+
+  function fakeData(days) {
+    var out = [], base = new Date(), seed = 7;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    for (var i = days - 1; i >= 0; i--) {
+      var dt = new Date(base.getTime() - i * 86400000);
+      var dau = Math.round(40 + (days - i) * 6 + rnd() * 30);
+      out.push({ day: dt.toISOString().slice(0, 10), dau: dau, sessions: Math.round(dau * 1.6), events: dau * 90,
+                 steals: Math.round(dau * (8 + rnd() * 6)), robux: Math.round(dau * rnd() * 4) * 10 });
+    }
+    var drops = [["Common", 0.52], ["Uncommon", 0.24], ["Rare", 0.13], ["Epic", 0.06], ["Legendary", 0.03], ["Mythic", 0.02]]
+      .map(function (r) { return { rarity: r[0], share: r[1], count: Math.round(r[1] * 4000) }; });
+    return { daily: out, drops: drops };
+  }
+
+  function api(path, key) {
+    return fetch(path, { headers: { "X-API-Key": key } }).then(function (r) {
+      if (r.status === 401) throw new Error("Wrong API key.");
+      if (r.status === 429) throw new Error("Too many requests, wait a minute.");
+      if (!r.ok) throw new Error("Server error (" + r.status + ").");
+      return r.json();
+    });
+  }
+
+  function load() {
+    var key = $("key").value.trim();
+    if (!key) { showMsg("Enter your API key first, or press Demo."); return; }
+    store(false, key);
+    demoMode = false; $("demoTag").style.display = "none"; showMsg("");
+    Promise.all([api("/v1/stats/daily?days=" + $("days").value, key), api("/v1/stats/drops", key)])
+      .then(function (res) {
+        state = { daily: res[0], drops: res[1] };
+        render();
+        if (!res[0].length) showMsg("Connected, but no events received yet. Charts fill in once players start sending data.");
+      })
+      .catch(function (e) { showMsg(e.message === "Failed to fetch" ? "Could not reach the server." : e.message); });
+  }
+
+  function demo() {
+    demoMode = true; showMsg("");
+    $("demoTag").style.display = "inline-block";
+    state = fakeData(parseInt($("days").value, 10));
+    render();
+  }
+
+  $("load").addEventListener("click", load);
+  $("demo").addEventListener("click", demo);
+  $("days").addEventListener("change", function () { demoMode ? demo() : ($("key").value && load()); });
+  window.addEventListener("resize", render);
+  var saved = store(true);
+  if (saved) { $("key").value = saved; load(); } else { render(); }
+  if (location.hash === "#demo") demo();
+})();
+</script>
+</body>
+</html>
